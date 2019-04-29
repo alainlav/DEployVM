@@ -1,16 +1,4 @@
-<#
 
-By Alain Laventure
--Version 1.00 Date -April 10 2017 -Creation of the script  
-
-
-This script create a new Azure VM   
-
-Script Number 100
-
-References 
-
-#>
 
 
 # Variables for common values
