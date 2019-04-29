@@ -1,0 +1,114 @@
+<#
+
+By Alain Laventure
+-Version 1.00 Date -April 10 2017 -Creation of the script  
+
+
+This script create a new Azure VM   
+
+Script Number 100
+
+References 
+
+#>
+
+
+# Variables for common values
+$RGName               = "RG-MTL"
+$Location             = "EastUS"
+$VMName               = "MTLDC-01"
+$VnetName             = 'MTL-VNet'
+$IPVnet               = '192.168.0.0/16'
+$SubnetName           = 'MTL-Subnet'
+$IPSubnet             = '192.168.1.0/24'
+$AllocationMethod     = 'Static'
+$IdleTimeoutInMinutes = '4'
+$VMSize               = 'Standard_D1'
+$PublisherName        = 'MicrosoftWindowsServer'
+$Offer                = 'WindowsServer'
+$Skus                 = '2016-Datacenter'
+$Version              = 'latest'
+$PrivateIPAddress     = '192.168.1.5'
+$DNSServer            = '192.168.1.5', '192.168.1.5'
+
+# Create user object
+$cred = Get-Credential -Message "Enter a username and password for the virtual machine."
+
+# Create a resource group
+New-AzureRmResourceGroup `
+    -ResourceGroupName $RGName `
+    -Location $location
+
+# Create a subnet configuration
+$subnetConfig = New-AzureRmVirtualNetworkSubnetConfig `
+    -Name $SubnetName `
+    -AddressPrefix $IPSubnet
+
+# Create a virtual network
+$vnet = New-AzureRmVirtualNetwork `
+    -ResourceGroupName $RGName `
+    -Location $location `
+    -Name $VnetName `
+    -AddressPrefix $IPVnet `
+    -Subnet $subnetConfig
+
+
+# Create a public IP address and specify a DNS name
+$PublicIP = New-AzureRmPublicIpAddress `
+    -ResourceGroupName $RGName `
+    -Location $location `
+    -Name $VMName'-IP' `
+    -AllocationMethod $AllocationMethod `
+    -IdleTimeoutInMinutes $IdleTimeoutInMinutes 
+
+# Create an inbound network security group rule for port 3389
+$nsgRuleRDP = New-AzureRmNetworkSecurityRuleConfig `
+    -Name 'nsgRuleRDP' `
+    -Protocol Tcp `
+    -Direction Inbound `
+    -Priority 1000 `
+    -SourceAddressPrefix * `
+    -SourcePortRange * `
+    -DestinationAddressPrefix * `
+    -DestinationPortRange 3389 `
+    -Access Allow
+
+# Create a network security group
+$nsg = New-AzureRmNetworkSecurityGroup `
+    -ResourceGroupName $RGName `
+    -Location $location `
+    -Name $VMname'-nsg' `
+    -SecurityRules $nsgRuleRDP
+
+# Create a virtual network card and associate with public IP address and NSG
+$nic = New-AzureRmNetworkInterface `
+    -Name $VMName `
+    -ResourceGroupName $RGName `
+    -Location $location `
+    -SubnetId $vnet.Subnets[0].Id `
+    -PublicIpAddressId $PublicIP.Id `
+    -NetworkSecurityGroupId $nsg.Id `
+    -PrivateIPAddress $PrivateIPAddress `
+    -DnsServer $DnsServer 
+
+# Create a virtual machine configuration
+$vmConfig = New-AzureRmVMConfig `
+    -VMName $vmName `
+    -VMSize $VMSize | 
+Set-AzureRmVMOperatingSystem `
+    -Windows `
+    -ComputerName $vmName `
+    -Credential $cred |
+Set-AzureRmVMSourceImage `
+    -PublisherName $PublisherName `
+    -Offer $Offer `
+    -Skus $Skus `
+    -Version $Version | `
+    Add-AzureRmVMNetworkInterface -Id $nic.Id
+
+# Create a virtual machine
+New-AzureRmVM `
+    -ResourceGroupName $RGName `
+    -Location $location `
+    -VM $vmConfig
+    -AsJob
